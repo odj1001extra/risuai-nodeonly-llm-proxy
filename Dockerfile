@@ -8,7 +8,7 @@ RUN corepack enable && corepack install --global pnpm@latest
 FROM base AS source
 ARG NODEONLY_REPO=https://github.com/mrbart3885/Risuai-NodeOnly.git
 ARG NODEONLY_REF=main
-RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates && rm -rf /var/lib/apt/lists/*
 RUN git clone --depth 1 --branch ${NODEONLY_REF} ${NODEONLY_REPO} .
 COPY inject/proxy-inject.js public/
 COPY patches/apply.cjs apply-llm-proxy-patch.cjs
