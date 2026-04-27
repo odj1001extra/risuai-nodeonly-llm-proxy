@@ -1,0 +1,22 @@
+name: risuai-nodeonly
+
+services:
+  risuai:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: always
+    ports:
+      - 6001:6001
+    volumes:
+      - risuai-save:/app/save
+      - ./custom-manifest/manifest.json:/app/dist/manifest.json:ro
+    depends_on:
+      - llm-proxy
+
+  llm-proxy:
+    build: ./llm-proxy
+    restart: always
+
+volumes:
+  risuai-save:
