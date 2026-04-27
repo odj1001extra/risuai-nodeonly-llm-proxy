@@ -5,6 +5,7 @@ WORKDIR /app
 COPY package.json ./
 RUN npm install --omit=dev
 COPY src/ ./src/
+COPY admin/ ./admin/
 
 ENV PORT=6100
 ENV BUFFER_TTL_MINUTES=30

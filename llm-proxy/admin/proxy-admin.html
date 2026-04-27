@@ -1,0 +1,2070 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LLM Proxy Dashboard</title>
+<style>
+/* ===== Theme Variables ===== */
+:root {
+  --transition-speed: 0.2s;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --mono: 'Cascadia Code', 'JetBrains Mono', 'Fira Code', 'Menlo', monospace;
+  --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+}
+
+[data-theme="dark"] {
+  --bg-0: #13141c;
+  --bg-1: #1a1b26;
+  --bg-2: #1e2030;
+  --bg-3: #282a3e;
+  --bg-hover: #2f3349;
+  --border: #363a52;
+  --border-subtle: #2a2e42;
+  --fg-0: #e0e4f5;
+  --fg-1: #c0caf5;
+  --fg-2: #a9b1d6;
+  --fg-3: #6b739a;
+  --fg-muted: #505882;
+  --accent: #7aa2f7;
+  --accent-hover: #89b4fa;
+  --accent-bg: #7aa2f718;
+  --green: #9ece6a;
+  --green-bg: #9ece6a18;
+  --yellow: #e0af68;
+  --yellow-bg: #e0af6818;
+  --red: #f7768e;
+  --red-bg: #f7768e18;
+  --orange: #ff9e64;
+  --orange-bg: #ff9e6418;
+  --cyan: #7dcfff;
+  --cyan-bg: #7dcfff18;
+  --purple: #bb9af7;
+  --purple-bg: #bb9af718;
+  --shadow: 0 1px 3px rgba(0,0,0,0.4);
+  --shadow-lg: 0 4px 16px rgba(0,0,0,0.5);
+}
+
+[data-theme="light"] {
+  --bg-0: #f0f2f8;
+  --bg-1: #ffffff;
+  --bg-2: #f7f8fc;
+  --bg-3: #eceef6;
+  --bg-hover: #e4e7f1;
+  --border: #d0d4e4;
+  --border-subtle: #e4e7f1;
+  --fg-0: #1a1b26;
+  --fg-1: #2e3450;
+  --fg-2: #4a5070;
+  --fg-3: #7a82a6;
+  --fg-muted: #a0a6c0;
+  --accent: #4070d0;
+  --accent-hover: #3060c0;
+  --accent-bg: #4070d012;
+  --green: #2b8a3e;
+  --green-bg: #2b8a3e12;
+  --yellow: #c08800;
+  --yellow-bg: #c0880012;
+  --red: #d03050;
+  --red-bg: #d0305012;
+  --orange: #d07020;
+  --orange-bg: #d0702012;
+  --cyan: #2080b0;
+  --cyan-bg: #2080b012;
+  --purple: #7040c0;
+  --purple-bg: #7040c012;
+  --shadow: 0 1px 3px rgba(0,0,0,0.08);
+  --shadow-lg: 0 4px 16px rgba(0,0,0,0.1);
+}
+
+/* ===== Reset & Base ===== */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: var(--sans);
+  background: var(--bg-0);
+  color: var(--fg-1);
+  line-height: 1.5;
+  min-height: 100vh;
+  transition: background var(--transition-speed), color var(--transition-speed);
+}
+
+/* ===== Scrollbar ===== */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--fg-muted); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--fg-3); }
+
+/* ===== Header ===== */
+.header {
+  background: var(--bg-1);
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: var(--shadow);
+  transition: background var(--transition-speed), border-color var(--transition-speed);
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.header-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--fg-0);
+  white-space: nowrap;
+}
+
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  transition: all var(--transition-speed);
+}
+.status-chip.ok {
+  background: var(--green-bg);
+  color: var(--green);
+}
+.status-chip.error {
+  background: var(--red-bg);
+  color: var(--red);
+}
+.status-chip.connecting {
+  background: var(--yellow-bg);
+  color: var(--yellow);
+}
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+.status-chip.ok .status-dot { animation: pulse-green 2s infinite; }
+@keyframes pulse-green {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* ===== Controls ===== */
+.ctrl-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ctrl-label {
+  font-size: 11px;
+  color: var(--fg-3);
+  letter-spacing: 0.3px;
+}
+.ctrl-select {
+  appearance: none;
+  background: var(--bg-3);
+  color: var(--fg-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 5px 24px 5px 8px;
+  font-size: 12px;
+  font-family: var(--mono);
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%236b739a'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  transition: border-color var(--transition-speed);
+}
+.ctrl-select:hover { border-color: var(--accent); }
+.ctrl-select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+
+.ctrl-input {
+  background: var(--bg-3);
+  color: var(--fg-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 5px 8px;
+  font-size: 12px;
+  font-family: var(--mono);
+  transition: border-color var(--transition-speed);
+}
+.ctrl-input:hover { border-color: var(--accent); }
+.ctrl-input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+
+/* ===== Buttons ===== */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: var(--sans);
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.btn:active { transform: scale(0.97); }
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+}
+.btn-primary:hover { background: var(--accent-hover); }
+.btn-ghost {
+  background: transparent;
+  color: var(--fg-2);
+  border: 1px solid var(--border);
+}
+.btn-ghost:hover {
+  background: var(--bg-hover);
+  border-color: var(--fg-3);
+}
+.btn-icon {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--fg-2);
+  cursor: pointer;
+  font-size: 16px;
+  transition: all 0.15s;
+}
+.btn-icon:hover {
+  background: var(--bg-hover);
+  color: var(--fg-0);
+}
+.btn-icon:active { transform: scale(0.92); }
+
+/* ===== Tabs ===== */
+.tab-bar {
+  background: var(--bg-1);
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px;
+  display: flex;
+  gap: 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  transition: background var(--transition-speed);
+}
+.tab-bar::-webkit-scrollbar { display: none; }
+
+.tab-btn {
+  background: none;
+  border: none;
+  color: var(--fg-3);
+  padding: 12px 18px;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: var(--sans);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+  transition: all 0.15s;
+  position: relative;
+}
+.tab-btn:hover { color: var(--fg-2); }
+.tab-btn.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+
+/* ===== Main content ===== */
+.main {
+  padding: 20px 24px 40px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+.tab-panel { display: none; }
+.tab-panel.active {
+  display: block;
+  animation: fadeIn 0.15s ease;
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ===== Section Titles ===== */
+.section-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--fg-3);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  margin: 24px 0 12px;
+}
+.section-title:first-child { margin-top: 0; }
+
+/* ===== Stat Cards ===== */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+}
+.stat-card {
+  background: var(--bg-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  transition: all var(--transition-speed);
+}
+.stat-card:hover {
+  border-color: var(--fg-muted);
+  box-shadow: var(--shadow);
+}
+.stat-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--fg-3);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-bottom: 6px;
+}
+.stat-value {
+  font-size: 24px;
+  font-weight: 800;
+  font-family: var(--mono);
+  line-height: 1.1;
+}
+.stat-sub {
+  font-size: 11px;
+  color: var(--fg-muted);
+  margin-top: 4px;
+}
+/* colored stat values */
+.c-green  { color: var(--green); }
+.c-yellow { color: var(--yellow); }
+.c-red    { color: var(--red); }
+.c-accent { color: var(--accent); }
+.c-cyan   { color: var(--cyan); }
+.c-purple { color: var(--purple); }
+.c-orange { color: var(--orange); }
+
+/* ===== Filter Pills ===== */
+.filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.filter-pill {
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  color: var(--fg-2);
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: var(--sans);
+}
+.filter-pill:hover {
+  background: var(--bg-hover);
+  border-color: var(--fg-3);
+}
+.filter-pill.active {
+  background: var(--accent-bg);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ===== Tables ===== */
+.table-wrap {
+  background: var(--bg-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: auto;
+  max-height: 600px;
+  transition: all var(--transition-speed);
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+thead {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+th {
+  text-align: left;
+  padding: 10px 12px;
+  background: var(--bg-2);
+  color: var(--fg-3);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--fg-2);
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+tr { transition: background 0.1s; }
+tbody tr:hover { background: var(--bg-hover); }
+tbody tr:last-child td { border-bottom: none; }
+.td-empty {
+  text-align: center;
+  color: var(--fg-muted);
+  padding: 32px 12px;
+  font-family: var(--sans);
+  font-size: 13px;
+}
+
+/* ===== Status Badges ===== */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: var(--sans);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.badge.pending   { background: var(--yellow-bg); color: var(--yellow); }
+.badge.streaming { background: var(--accent-bg); color: var(--accent); }
+.badge.completed { background: var(--green-bg); color: var(--green); }
+.badge.failed    { background: var(--red-bg); color: var(--red); }
+.badge.cancelled { background: var(--bg-3); color: var(--fg-3); }
+
+/* ===== Expandable Row Detail ===== */
+.detail-row td {
+  padding: 0;
+  background: var(--bg-2);
+}
+.detail-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+.btn-danger {
+  background: var(--red-bg);
+  color: var(--red);
+  border: 1px solid var(--red);
+  border-radius: var(--radius-sm);
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.btn-danger:hover { background: var(--red); color: #fff; }
+.btn-danger:disabled { opacity: 0.5; cursor: not-allowed; }
+.detail-content {
+  padding: 14px 16px;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--fg-2);
+}
+.detail-content .detail-field {
+  display: flex;
+  gap: 12px;
+  padding: 2px 0;
+}
+.detail-content .detail-key {
+  color: var(--cyan);
+  font-weight: 600;
+  min-width: 120px;
+  flex-shrink: 0;
+}
+.detail-content .detail-val {
+  word-break: break-all;
+  white-space: pre-wrap;
+}
+.detail-loading {
+  padding: 20px 16px;
+  text-align: center;
+  color: var(--fg-muted);
+  font-family: var(--sans);
+}
+/* Collapsible body section */
+.detail-section {
+  margin-top: 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.detail-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: var(--bg-3);
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.1s;
+}
+.detail-section-header:hover { background: var(--bg-hover); }
+.detail-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--cyan);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.detail-section-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.detail-section-toggle {
+  color: var(--fg-3);
+  font-size: 10px;
+  transition: transform 0.15s;
+}
+.detail-section.collapsed .detail-section-toggle {
+  transform: rotate(-90deg);
+}
+.detail-section-body {
+  padding: 8px 10px;
+  max-height: 400px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--fg-2);
+  background: var(--bg-1);
+}
+.detail-section.collapsed .detail-section-body {
+  display: none;
+}
+.btn-copy-sm {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--fg-3);
+  font-size: 10px;
+  padding: 2px 6px;
+  cursor: pointer;
+  font-family: var(--sans);
+  transition: all 0.15s;
+}
+.btn-copy-sm:hover { background: var(--bg-hover); color: var(--fg-1); }
+
+/* ===== Logs ===== */
+.log-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.log-search {
+  flex: 1;
+  min-width: 160px;
+  background: var(--bg-3);
+  color: var(--fg-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  font-size: 12px;
+  font-family: var(--mono);
+}
+.log-search:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.log-search::placeholder { color: var(--fg-muted); }
+
+.log-container {
+  background: var(--bg-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  max-height: 640px;
+  overflow-y: auto;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.8;
+  transition: all var(--transition-speed);
+}
+.log-entry {
+  padding: 1px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  transition: background 0.1s;
+}
+.log-entry:last-child { border-bottom: none; }
+.log-entry:hover { background: var(--bg-hover); }
+.log-ts {
+  color: var(--fg-muted);
+  flex-shrink: 0;
+  min-width: 72px;
+  font-size: 11px;
+}
+.log-lvl {
+  flex-shrink: 0;
+  min-width: 44px;
+  font-weight: 700;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+.log-lvl.debug { color: var(--fg-muted); }
+.log-lvl.info  { color: var(--accent); }
+.log-lvl.warn  { color: var(--yellow); }
+.log-lvl.error { color: var(--red); }
+.log-msg { color: var(--fg-2); flex: 1; min-width: 0; }
+.log-data {
+  color: var(--fg-muted);
+  font-size: 11px;
+  word-break: break-all;
+  white-space: pre-wrap;
+  max-width: 400px;
+}
+.log-empty {
+  padding: 32px;
+  text-align: center;
+  color: var(--fg-muted);
+  font-family: var(--sans);
+  font-size: 13px;
+}
+
+/* ===== Config ===== */
+.config-list {
+  background: var(--bg-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.config-row {
+  display: flex;
+  border-bottom: 1px solid var(--border-subtle);
+  transition: background 0.1s;
+}
+.config-row:last-child { border-bottom: none; }
+.config-row:hover { background: var(--bg-hover); }
+.config-key {
+  width: 260px;
+  flex-shrink: 0;
+  padding: 10px 14px;
+  color: var(--cyan);
+  font-weight: 600;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.config-val {
+  flex: 1;
+  padding: 10px 14px;
+  color: var(--fg-2);
+  font-family: var(--mono);
+  font-size: 12px;
+  word-break: break-all;
+  white-space: pre-wrap;
+}
+.config-val .null { color: var(--fg-muted); font-style: italic; }
+.config-val .bool-true { color: var(--green); }
+.config-val .bool-false { color: var(--red); }
+
+/* ===== Toast notification ===== */
+.toast-container {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+.toast {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 10px 16px;
+  font-size: 13px;
+  color: var(--fg-1);
+  box-shadow: var(--shadow-lg);
+  pointer-events: auto;
+  animation: toastIn 0.25s ease;
+  max-width: 360px;
+}
+.toast.error {
+  border-color: var(--red);
+  background: var(--red-bg);
+  color: var(--red);
+}
+.toast.warn {
+  border-color: var(--yellow);
+  background: var(--bg-2);
+  color: var(--fg-1);
+  border-width: 2px;
+}
+.toast.warn .toast-body > span {
+  color: var(--fg-1);
+}
+/* Center-modal variant — 중요 confirm에 사용 */
+.toast.center {
+  position: fixed;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 300;
+  max-width: 420px;
+  padding: 18px 22px;
+  font-size: 14px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4), 0 0 0 100vmax rgba(0,0,0,0.35);
+  animation: toastInCenter 0.22s ease;
+}
+@keyframes toastInCenter {
+  from { opacity: 0; transform: translate(-50%, -46%); }
+  to   { opacity: 1; transform: translate(-50%, -50%); }
+}
+.toast-body {
+  display: flex; align-items: center; gap: 12px;
+}
+.toast-body > span { white-space: pre-line; line-height: 1.5; }
+.toast-action {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.toast-action:hover { filter: brightness(1.1); }
+.toast.warn .toast-action { background: var(--yellow); color: #000; }
+/* center 토스트는 데스크탑/모바일 모두 세로 스택 — 좌우 배치 시 메시지 가독성 저하 */
+.toast.center .toast-body {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 14px;
+  text-align: center;
+}
+.toast.center .toast-action {
+  padding: 10px 14px;
+  font-size: 14px;
+  width: 100%;
+}
+
+/* 모바일: 토스트 자체 폭만 viewport에 맞춰 확장 */
+@media (max-width: 600px) {
+  .toast.center {
+    max-width: calc(100vw - 32px);
+    width: calc(100vw - 32px);
+    padding: 20px;
+  }
+}
+.toast.fade-out { animation: toastOut 0.2s ease forwards; }
+@keyframes toastIn { from { opacity: 0; transform: translateY(12px); } }
+@keyframes toastOut { to { opacity: 0; transform: translateY(-8px); } }
+
+/* ===== Loading spinner ===== */
+.spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes sse-blink {
+  0% { background-color: var(--bg); }
+  15% { background-color: var(--blink-color, var(--accent)); opacity: 0.18; }
+  100% { background-color: var(--bg); opacity: 1; }
+}
+.sse-blink { animation: sse-blink 0.3s ease-out; }
+.sse-blink-created   { --blink-color: var(--cyan); }
+.sse-blink-streaming { --blink-color: var(--accent); }
+.sse-blink-completed { --blink-color: var(--green); }
+.sse-blink-failed    { --blink-color: var(--red); }
+.sse-blink-cancelled { --blink-color: var(--yellow); }
+
+/* ===== Responsive ===== */
+@media (max-width: 768px) {
+  .header { padding: 0 14px; height: 50px; }
+  .header-title { font-size: 14px; }
+  .header-right .ctrl-group { display: none; }
+  .tab-bar { padding: 0 14px; }
+  .tab-btn { padding: 10px 12px; font-size: 12px; }
+  .main { padding: 14px; }
+  .stat-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+  .stat-card { padding: 12px; }
+  .stat-value { font-size: 20px; }
+  .config-key { width: 160px; font-size: 11px; }
+  .config-val { font-size: 11px; }
+  .log-data { display: none; }
+  td { font-size: 11px; padding: 6px 8px; }
+  th { padding: 8px; font-size: 10px; }
+  .toast-container { bottom: 12px; right: 12px; left: 12px; }
+  .toast { max-width: 100%; }
+
+  /* ===== 2-row card layout for data tables (Requests/History/Costs) ===== */
+  #panel-requests .table-wrap thead,
+  #panel-history  .table-wrap thead,
+  #panel-costs    .table-wrap thead { display: none; }
+
+  #panel-requests .table-wrap table,
+  #panel-history  .table-wrap table,
+  #panel-costs    .table-wrap table { border-collapse: collapse; }
+
+  /* 기본 카드 스타일 (데이터 행). empty/detail 행은 :not(:has(...))로 제외. */
+  #reqTbody tr.req-row,
+  #histTbody tr.hist-row,
+  #costTbody tr:not(:has(.td-empty)) {
+    display: grid;
+    gap: 3px 10px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    align-items: center;
+  }
+  #reqTbody tr.req-row td,
+  #histTbody tr.hist-row td,
+  #costTbody tr:not(:has(.td-empty)) td {
+    padding: 0; border: none;
+    font-size: 12px; line-height: 1.4;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+
+  /* Empty/detail 행은 그리드 제외 — 전체 폭 유지 */
+  #reqTbody tr.detail-row,
+  #histTbody tr.detail-row { display: table-row; }
+  #reqTbody tr.detail-row td,
+  #histTbody tr.detail-row td { padding: 12px; }
+  .td-empty { text-align: center; padding: 20px 12px; }
+
+  /* 공통: 숫자 셀 앞에 미니 라벨 */
+  #reqTbody td.col-tin::before,
+  #costTbody td.col-tin::before { content: "in "; opacity: 0.55; font-size: 10px; }
+  #reqTbody td.col-tout::before,
+  #costTbody td.col-tout::before { content: "out "; opacity: 0.55; font-size: 10px; }
+  #histTbody td.col-tokens::before { content: "tok "; opacity: 0.55; font-size: 10px; }
+  #histTbody td.col-cost::before,
+  #costTbody td.col-cost::before { content: "$"; opacity: 0.55; font-size: 10px; }
+  #reqTbody td.col-dur::before,
+  #histTbody td.col-dur::before { content: "⏱ "; opacity: 0.55; font-size: 10px; }
+  #reqTbody td.col-session::before,
+  #histTbody td.col-session::before { content: "#"; opacity: 0.55; }
+
+  /* Requests: Line 1 = status · model · created / Line 2 = session · tokens in/out · duration */
+  #reqTbody tr.req-row {
+    grid-template-columns: auto 1fr auto auto;
+    grid-template-areas:
+      "status  model  model   created"
+      "session tin    tout    duration";
+  }
+  #reqTbody td.col-id { display: none; }
+  #reqTbody td.col-status   { grid-area: status; }
+  #reqTbody td.col-model    { grid-area: model; font-weight: 500; }
+  #reqTbody td.col-created  { grid-area: created; color: var(--fg-muted); font-size: 11px; text-align: right; }
+  #reqTbody td.col-session  { grid-area: session; color: var(--fg-muted); font-size: 11px; }
+  #reqTbody td.col-tin      { grid-area: tin; color: var(--fg-muted); font-size: 11px; }
+  #reqTbody td.col-tout     { grid-area: tout; color: var(--fg-muted); font-size: 11px; }
+  #reqTbody td.col-dur      { grid-area: duration; color: var(--fg-muted); font-size: 11px; text-align: right; }
+
+  /* History: Line 1 = status · model · created / Line 2 = session · tokens · cost · duration */
+  #histTbody tr.hist-row {
+    grid-template-columns: auto 1fr auto auto;
+    grid-template-areas:
+      "status  model  model  created"
+      "session tokens cost   duration";
+  }
+  #histTbody td.col-id { display: none; }
+  #histTbody td.col-status   { grid-area: status; }
+  #histTbody td.col-model    { grid-area: model; font-weight: 500; }
+  #histTbody td.col-created  { grid-area: created; color: var(--fg-muted); font-size: 11px; text-align: right; }
+  #histTbody td.col-session  { grid-area: session; color: var(--fg-muted); font-size: 11px; }
+  #histTbody td.col-tokens   { grid-area: tokens; color: var(--fg-muted); font-size: 11px; }
+  #histTbody td.col-cost     { grid-area: cost; color: var(--fg-muted); font-size: 11px; }
+  #histTbody td.col-dur      { grid-area: duration; color: var(--fg-muted); font-size: 11px; text-align: right; }
+
+  /* Costs: Line 1 = model · provider · cost / Line 2 = id · tokens in/out · source */
+  #costTbody tr:not(:has(.td-empty)) {
+    grid-template-columns: 1fr auto auto auto;
+    grid-template-areas:
+      "model provider provider cost"
+      "id    tin      tout     source";
+  }
+  #costTbody td.col-model    { grid-area: model; font-weight: 500; }
+  #costTbody td.col-provider { grid-area: provider; color: var(--fg-muted); font-size: 11px; }
+  #costTbody td.col-cost     { grid-area: cost; text-align: right; }
+  #costTbody td.col-id       { grid-area: id; color: var(--fg-muted); font-size: 11px; font-family: monospace; }
+  #costTbody td.col-tin      { grid-area: tin; color: var(--fg-muted); font-size: 11px; }
+  #costTbody td.col-tout     { grid-area: tout; color: var(--fg-muted); font-size: 11px; }
+  #costTbody td.col-source   { grid-area: source; font-size: 11px; text-align: right; }
+}
+
+@media (max-width: 480px) {
+  .stat-grid { grid-template-columns: repeat(2, 1fr); }
+  .header-left .status-chip span:not(.status-dot) { display: none; }
+  .config-row { flex-direction: column; }
+  .config-key { width: auto; padding-bottom: 2px; }
+  .config-val { padding-top: 0; }
+  .detail-content .detail-field { flex-direction: column; gap: 2px; }
+  .detail-content .detail-key { min-width: 0; }
+}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div class="header-left">
+    <span class="header-title">LLM Proxy</span>
+    <span class="status-chip connecting" id="statusChip">
+      <span class="status-dot"></span>
+      <span id="statusLabel">connecting</span>
+    </span>
+  </div>
+  <div class="header-right">
+    <span class="ctrl-label" id="sseStatus" title="Live event stream">&#x26A1; live</span>
+    <button class="btn-icon" onclick="toggleNotify()" title="Toggle browser notification" id="notifyBtn">&#x1F514;</button>
+    <button class="btn-icon" onclick="refreshAll()" title="Refresh now" id="refreshBtn">&#x21bb;</button>
+    <button class="btn-icon" onclick="toggleTheme()" title="Toggle light/dark" id="themeBtn">&#x263E;</button>
+  </div>
+</div>
+
+<!-- Tabs -->
+<div class="tab-bar" id="tabBar">
+  <button class="tab-btn active" data-tab="overview">Overview</button>
+  <button class="tab-btn" data-tab="requests">Requests</button>
+  <button class="tab-btn" data-tab="costs">Costs</button>
+  <button class="tab-btn" data-tab="history">History</button>
+  <button class="tab-btn" data-tab="logs">Logs</button>
+  <button class="tab-btn" data-tab="config">Config</button>
+</div>
+
+<!-- Main Content -->
+<div class="main">
+
+  <!-- Overview -->
+  <div class="tab-panel active" id="panel-overview">
+    <div class="section-title">Status</div>
+    <div class="stat-grid" id="overviewStats"></div>
+    <div class="section-title">Cost Summary</div>
+    <div class="stat-grid" id="overviewCosts"></div>
+    <div class="section-title">Memory</div>
+    <div class="stat-grid" id="overviewMemory"></div>
+    <div class="section-title">Data Management</div>
+    <div style="display:flex;gap:10px;align-items:center;">
+      <button class="btn btn-ghost" style="color:var(--red);border-color:var(--red);" onclick="resetAllData()">Reset All Data</button>
+      <span style="font-size:12px;color:var(--fg-muted);">Cost history, request log, and statistics will be permanently cleared.</span>
+    </div>
+  </div>
+
+  <!-- Requests -->
+  <div class="tab-panel" id="panel-requests">
+    <div class="filter-bar" id="reqFilterBar">
+      <span class="filter-pill active" data-filter="">All</span>
+      <span class="filter-pill" data-filter="pending">Pending</span>
+      <span class="filter-pill" data-filter="streaming">Streaming</span>
+      <span class="filter-pill" data-filter="completed">Completed</span>
+      <span class="filter-pill" data-filter="failed">Failed</span>
+      <span class="filter-pill" data-filter="cancelled">Cancelled</span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Request ID</th>
+            <th>Session</th>
+            <th>Model</th>
+            <th>Status</th>
+            <th>Tokens In</th>
+            <th>Tokens Out</th>
+            <th>Duration</th>
+            <th>Created</th>
+          </tr>
+        </thead>
+        <tbody id="reqTbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Costs -->
+  <div class="tab-panel" id="panel-costs">
+    <div class="stat-grid" id="costStats"></div>
+    <div class="section-title">Per-Request Costs</div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Request ID</th>
+            <th>Model</th>
+            <th>Provider</th>
+            <th>Tokens In</th>
+            <th>Tokens Out</th>
+            <th>Cost</th>
+            <th>Source</th>
+          </tr>
+        </thead>
+        <tbody id="costTbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- History (persisted request log) -->
+  <div class="tab-panel" id="panel-history">
+    <div class="stat-grid" id="historyStats"></div>
+    <div class="filter-bar" id="histFilterBar">
+      <span class="filter-pill active" data-hfilter="">All</span>
+      <span class="filter-pill" data-hfilter="completed">Completed</span>
+      <span class="filter-pill" data-hfilter="failed">Failed</span>
+      <span class="filter-pill" data-hfilter="cancelled">Cancelled</span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Request ID</th>
+            <th>Session</th>
+            <th>Model</th>
+            <th>Status</th>
+            <th>Tokens</th>
+            <th>Cost</th>
+            <th>Duration</th>
+            <th>Created</th>
+          </tr>
+        </thead>
+        <tbody id="histTbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Logs -->
+  <div class="tab-panel" id="panel-logs">
+    <div class="log-toolbar">
+      <div class="filter-bar" id="logFilterBar" style="margin-bottom:0;">
+        <span class="filter-pill active" data-level="">All</span>
+        <span class="filter-pill" data-level="debug">Debug</span>
+        <span class="filter-pill" data-level="info">Info</span>
+        <span class="filter-pill" data-level="warn">Warn</span>
+        <span class="filter-pill" data-level="error">Error</span>
+      </div>
+      <input type="text" class="log-search" id="logSearch" placeholder="Search logs...">
+      <div class="ctrl-group">
+        <span class="ctrl-label">Limit</span>
+        <input type="number" class="ctrl-input" id="logLimit" value="200" min="10" max="500" style="width:56px">
+      </div>
+      <button class="btn btn-ghost" onclick="fetchLogs()">Apply</button>
+    </div>
+    <div class="log-container" id="logContainer"></div>
+  </div>
+
+  <!-- Config -->
+  <div class="tab-panel" id="panel-config">
+    <!-- Client Settings (localStorage) -->
+    <div class="section-title">Client Settings</div>
+    <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:24px;padding:16px;background:var(--bg-2);border-radius:var(--radius-md);border:1px solid var(--border-subtle)">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+        <div>
+          <div style="font-weight:600;color:var(--fg-1)">Special Day Override</div>
+          <div style="font-size:0.85em;color:var(--fg-3);margin-top:2px">RisuAI 이벤트 페이지를 제어합니다. 변경 후 RisuAI 페이지를 새로고침하세요.</div>
+        </div>
+        <select id="specialDaySelect" onchange="saveSpecialDay()" style="padding:6px 10px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--bg-3);color:var(--fg-1);font-size:0.9em;min-width:160px">
+          <option value="none">기본 (실제 날짜)</option>
+          <option value="disabled">이벤트 끄기</option>
+          <option value="christmas">&#x1F384; Christmas (12/25)</option>
+          <option value="newYear">&#x1F386; New Year (1/1)</option>
+          <option value="aprilFool">&#x1F921; April Fools (4/1)</option>
+          <option value="anniversary">&#x1F382; Anniversary (4/13)</option>
+          <option value="halloween">&#x1F383; Halloween (10/31)</option>
+          <option value="chuseok">&#x1F319; Chuseok (9/16)</option>
+        </select>
+      </div>
+    </div>
+    <!-- Server Config (read-only) -->
+    <div class="section-title">Server Config</div>
+    <div id="configContainer"></div>
+  </div>
+
+</div>
+
+<!-- Toast container -->
+<div class="toast-container" id="toasts"></div>
+
+<script>
+// ===== Configuration =====
+var PROXY_BASE = (function () {
+  var params = new URLSearchParams(window.location.search);
+  if (params.get('proxy')) return params.get('proxy').replace(/\/$/, '');
+  var path = window.location.pathname;
+  if (path.includes('/llm-proxy/')) return path.replace(/\/admin$/, '');
+  return '';
+})();
+
+// ===== State =====
+var healthData = null;
+var requestsData = [];
+var costsData = [];
+var logsData = [];
+var configData = null;
+var reqFilter = '';
+var histFilter = '';
+var historyData = [];
+var historyTotal = 0;
+var historyMax = 100;
+var logLevelFilter = '';
+var expandedHistId = null;
+var expandedReqId = null;
+var expandedDetail = null; // cached detail data for expanded request
+var isRefreshing = false;
+
+// ===== Theme =====
+function initTheme() {
+  var saved = localStorage.getItem('llm-proxy-theme');
+  if (saved) {
+    document.documentElement.setAttribute('data-theme', saved);
+  }
+  updateThemeIcon();
+}
+
+function toggleTheme() {
+  var current = document.documentElement.getAttribute('data-theme');
+  var next = current === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  localStorage.setItem('llm-proxy-theme', next);
+  updateThemeIcon();
+}
+
+function updateThemeIcon() {
+  var btn = document.getElementById('themeBtn');
+  var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  btn.innerHTML = isDark ? '&#x2600;' : '&#x263E;';
+  btn.title = isDark ? 'Switch to light mode' : 'Switch to dark mode';
+}
+
+initTheme();
+
+// ===== Special Day Override =====
+function initSpecialDay() {
+  var sel = document.getElementById('specialDaySelect');
+  if (!sel) return;
+  var val = localStorage.getItem('llm-proxy-special-day') || 'none';
+  sel.value = val;
+}
+
+function saveSpecialDay() {
+  var sel = document.getElementById('specialDaySelect');
+  var val = sel.value;
+  if (val === 'none') {
+    localStorage.removeItem('llm-proxy-special-day');
+  } else {
+    localStorage.setItem('llm-proxy-special-day', val);
+  }
+}
+
+initSpecialDay();
+
+// ===== Browser Notification Toggle =====
+function initNotify() {
+  updateNotifyIcon();
+}
+
+function toggleNotify() {
+  var current = localStorage.getItem('llm-proxy-notify') === 'true';
+  if (!current) {
+    // Enabling — request permission first
+    if (typeof Notification === 'undefined') {
+      showToast('This browser does not support notifications', 'error');
+      return;
+    }
+    if (Notification.permission === 'denied') {
+      showToast('Notification permission denied. Please allow in browser settings.', 'error');
+      return;
+    }
+    if (Notification.permission === 'default') {
+      Notification.requestPermission().then(function (perm) {
+        if (perm === 'granted') {
+          localStorage.setItem('llm-proxy-notify', 'true');
+          updateNotifyIcon();
+          showToast('Notifications enabled');
+        } else {
+          showToast('Notification permission denied', 'error');
+        }
+      });
+      return;
+    }
+    // Already granted
+    localStorage.setItem('llm-proxy-notify', 'true');
+    showToast('Notifications enabled');
+  } else {
+    localStorage.setItem('llm-proxy-notify', 'false');
+    showToast('Notifications disabled');
+  }
+  updateNotifyIcon();
+}
+
+function updateNotifyIcon() {
+  var btn = document.getElementById('notifyBtn');
+  var on = localStorage.getItem('llm-proxy-notify') === 'true';
+  btn.innerHTML = on ? '&#x1F514;' : '&#x1F515;';
+  btn.title = on ? 'Notifications ON (click to disable)' : 'Notifications OFF (click to enable)';
+  btn.style.borderColor = on ? 'var(--green)' : '';
+  btn.style.color = on ? 'var(--green)' : '';
+}
+
+initNotify();
+
+// ===== Reset All Data =====
+async function resetAllData() {
+  if (!confirm('Are you sure you want to reset all data?\nCost history, request log, and statistics will be permanently deleted.')) return;
+  try {
+    var resp = await fetch(PROXY_BASE + '/admin/reset', { method: 'POST' });
+    if (!resp.ok) throw new Error(resp.status + ' ' + resp.statusText);
+    showToast('All data has been reset');
+    await refreshAll();
+  } catch (e) {
+    showToast('Reset failed: ' + e.message, 'error');
+  }
+}
+
+// ===== Tab switching =====
+document.getElementById('tabBar').addEventListener('click', function (e) {
+  var btn = e.target.closest('.tab-btn');
+  if (!btn) return;
+  document.querySelectorAll('.tab-btn').forEach(function (b) { b.classList.remove('active'); });
+  document.querySelectorAll('.tab-panel').forEach(function (p) { p.classList.remove('active'); });
+  btn.classList.add('active');
+  document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
+  var tab = btn.dataset.tab;
+  if (tab === 'overview') fetchHealth();
+  if (tab === 'requests') fetchRequests();
+  if (tab === 'costs') fetchCosts();
+  if (tab === 'history') fetchHistory();
+  if (tab === 'logs') fetchLogs();
+  if (tab === 'config') fetchConfig();
+});
+
+// ===== Filter pills: Requests =====
+document.getElementById('reqFilterBar').addEventListener('click', function (e) {
+  var pill = e.target.closest('.filter-pill');
+  if (!pill) return;
+  this.querySelectorAll('.filter-pill').forEach(function (p) { p.classList.remove('active'); });
+  pill.classList.add('active');
+  reqFilter = pill.dataset.filter;
+  renderRequests();
+});
+
+// ===== Filter pills: History =====
+document.getElementById('histFilterBar').addEventListener('click', function (e) {
+  var pill = e.target.closest('.filter-pill');
+  if (!pill) return;
+  this.querySelectorAll('.filter-pill').forEach(function (p) { p.classList.remove('active'); });
+  pill.classList.add('active');
+  histFilter = pill.dataset.hfilter;
+  renderHistory();
+});
+
+// ===== Filter pills: Logs =====
+document.getElementById('logFilterBar').addEventListener('click', function (e) {
+  var pill = e.target.closest('.filter-pill');
+  if (!pill) return;
+  this.querySelectorAll('.filter-pill').forEach(function (p) { p.classList.remove('active'); });
+  pill.classList.add('active');
+  logLevelFilter = pill.dataset.level;
+  fetchLogs();
+});
+
+// ===== Log search =====
+document.getElementById('logSearch').addEventListener('input', function () {
+  renderLogs();
+});
+
+// ===== API helper =====
+async function api(path) {
+  var resp = await fetch(PROXY_BASE + path);
+  if (!resp.ok) throw new Error(resp.status + ' ' + resp.statusText);
+  return resp.json();
+}
+
+// ===== Toast =====
+// opts: { action: { label, onClick }, duration (ms, 0 = persistent until action), center (bool) }
+function showToast(msg, type, opts) {
+  opts = opts || {};
+  var container = document.getElementById('toasts');
+  var el = document.createElement('div');
+  el.className = 'toast' + (type === 'error' ? ' error' : '') + (type === 'warn' ? ' warn' : '') + (opts.center ? ' center' : '');
+
+  var body = document.createElement('div');
+  body.className = 'toast-body';
+  var msgEl = document.createElement('span');
+  msgEl.textContent = msg;
+  body.appendChild(msgEl);
+
+  if (opts.action) {
+    var btn = document.createElement('button');
+    btn.className = 'toast-action';
+    btn.textContent = opts.action.label;
+    btn.onclick = function () {
+      try { opts.action.onClick(); } catch (e) { console.error(e); }
+      el.classList.add('fade-out');
+      setTimeout(function () { el.remove(); }, 200);
+    };
+    body.appendChild(btn);
+  }
+  el.appendChild(body);
+  container.appendChild(el);
+
+  var duration = opts.duration != null ? opts.duration : 4000;
+  if (duration > 0) {
+    setTimeout(function () {
+      el.classList.add('fade-out');
+      setTimeout(function () { el.remove(); }, 200);
+    }, duration);
+  }
+  return el;
+}
+
+// ===== Cancel request =====
+function promptCancelRequest(requestId) {
+  showToast('⚠️ 이 요청을 취소하시겠습니까?\n업스트림 연결이 즉시 끊깁니다.', 'warn', {
+    duration: 4000,
+    center: true,
+    action: { label: '취소 실행', onClick: function () { doCancelRequest(requestId); } }
+  });
+}
+
+async function doCancelRequest(requestId) {
+  try {
+    var resp = await fetch(PROXY_BASE + '/cancel/' + encodeURIComponent(requestId), { method: 'POST' });
+    if (resp.ok) {
+      showToast('요청 취소 완료: ' + requestId.slice(0, 16));
+    } else {
+      var txt = await resp.text().catch(function () { return ''; });
+      showToast('취소 실패 (' + resp.status + '): ' + (txt || resp.statusText), 'error');
+    }
+  } catch (e) {
+    showToast('취소 네트워크 오류: ' + (e && e.message ? e.message : e), 'error');
+  }
+}
+
+// ===== Format helpers =====
+function fmtUptime(sec) {
+  if (sec == null) return '-';
+  var d = Math.floor(sec / 86400);
+  var h = Math.floor((sec % 86400) / 3600);
+  var m = Math.floor((sec % 3600) / 60);
+  var s = sec % 60;
+  if (d > 0) return d + 'd ' + h + 'h ' + m + 'm';
+  if (h > 0) return h + 'h ' + m + 'm ' + s + 's';
+  if (m > 0) return m + 'm ' + s + 's';
+  return s + 's';
+}
+
+function fmtCost(n) {
+  if (n === 0 || n == null) return '$0.00';
+  if (n < 0.01) return '$' + n.toFixed(4);
+  return '$' + n.toFixed(2);
+}
+
+function fmtNum(n) {
+  if (n == null) return '-';
+  return n.toLocaleString();
+}
+
+function fmtTime(iso) {
+  if (!iso) return '-';
+  return new Date(iso).toLocaleTimeString('ko-KR', { hour12: false });
+}
+
+function fmtTimeShort(iso) {
+  if (!iso) return '';
+  return iso.slice(11, 19);
+}
+
+function fmtRelTime(iso) {
+  if (!iso) return '-';
+  var diff = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (diff < 60) return Math.floor(diff) + 's ago';
+  if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+  if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+  return Math.floor(diff / 86400) + 'd ago';
+}
+
+function fmtBytes(kb) {
+  if (kb == null) return '-';
+  kb = parseFloat(kb);
+  if (isNaN(kb)) return '-';
+  if (kb < 1) return (kb * 1024).toFixed(0) + ' B';
+  if (kb < 1024) return kb.toFixed(1) + ' KB';
+  return (kb / 1024).toFixed(2) + ' MB';
+}
+
+function fmtBytesRaw(bytes) {
+  if (bytes == null) return '-';
+  bytes = Number(bytes);
+  if (isNaN(bytes)) return '-';
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / 1048576).toFixed(2) + ' MB';
+}
+
+function esc(s) {
+  if (!s) return '';
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// ===== Render: Overview =====
+function renderOverview() {
+  if (!healthData) return;
+  var h = healthData;
+
+  // Update status chip
+  var chip = document.getElementById('statusChip');
+  var label = document.getElementById('statusLabel');
+  chip.className = 'status-chip ' + (h.status === 'ok' ? 'ok' : 'error');
+  label.textContent = h.status === 'ok' ? 'connected' : 'error';
+
+  document.getElementById('overviewStats').innerHTML =
+    statCard('Status', (h.status || 'unknown').toUpperCase(), h.status === 'ok' ? 'c-green' : 'c-red', 'Uptime: ' + fmtUptime(h.uptime)) +
+    statCard('Total Buffers', fmtNum(h.total), 'c-accent') +
+    statCard('Pending', fmtNum(h.pending), 'c-yellow') +
+    statCard('Streaming', fmtNum(h.streaming), 'c-cyan') +
+    statCard('Completed', fmtNum(h.completed), 'c-green') +
+    statCard('Failed', fmtNum(h.failed), 'c-red') +
+    statCard('Cancelled', fmtNum(h.cancelled), '') +
+    statCard('Webhook', h.webhook || 'disabled', h.webhook === 'enabled' ? 'c-green' : '');
+
+  var cost = h.cost || {};
+  document.getElementById('overviewCosts').innerHTML =
+    statCard('Total Cost', fmtCost(cost.totalCost), 'c-orange') +
+    statCard('Tokens In', fmtNum(cost.totalTokensIn), '') +
+    statCard('Tokens Out', fmtNum(cost.totalTokensOut), '') +
+    statCard('Tracked', fmtNum(cost.requestCount), '');
+
+  document.getElementById('overviewMemory').innerHTML =
+    statCard('Buffer Memory', fmtBytesRaw(h.memoryBytes != null ? h.memoryBytes : (parseFloat(h.memoryMB || '0') * 1048576)), 'c-purple', 'Max: ' + (h.memoryLimitMB || '-') + ' MB') +
+    statCard('Active Buffers', fmtNum((h.pending || 0) + (h.streaming || 0)), '', 'Total: ' + fmtNum(h.total));
+}
+
+function statCard(label, value, colorClass, sub) {
+  return '<div class="stat-card">' +
+    '<div class="stat-label">' + esc(label) + '</div>' +
+    '<div class="stat-value ' + (colorClass || '') + '">' + esc(String(value)) + '</div>' +
+    (sub ? '<div class="stat-sub">' + esc(sub) + '</div>' : '') +
+    '</div>';
+}
+
+// ===== Render: Requests =====
+function renderRequests() {
+  var filtered = reqFilter ? requestsData.filter(function (r) { return r.status === reqFilter; }) : requestsData.slice();
+  var tbody = document.getElementById('reqTbody');
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = '<tr><td class="td-empty" colspan="8">No requests</td></tr>';
+    return;
+  }
+
+  // Newest first
+  filtered.sort(function (a, b) {
+    return (b.createdAt || '').localeCompare(a.createdAt || '');
+  });
+
+  var html = '';
+  for (var i = 0; i < filtered.length; i++) {
+    var r = filtered[i];
+    var rid = r.requestId || '';
+    var isExpanded = expandedReqId === rid;
+
+    var dur = '';
+    if (r.createdAt && r.completedAt) {
+      var ms = new Date(r.completedAt).getTime() - new Date(r.createdAt).getTime();
+      if (ms < 1000) dur = ms + 'ms';
+      else if (ms < 60000) dur = (ms / 1000).toFixed(1) + 's';
+      else dur = Math.floor(ms / 60000) + 'm ' + Math.floor((ms % 60000) / 1000) + 's';
+    } else if (r.createdAt) {
+      var elapsed = Date.now() - new Date(r.createdAt).getTime();
+      if (elapsed < 1000) dur = '...';
+      else if (elapsed < 60000) dur = (elapsed / 1000).toFixed(0) + 's...';
+      else dur = Math.floor(elapsed / 60000) + 'm...';
+    }
+
+    html += '<tr class="req-row" data-rid="' + esc(rid) + '" style="cursor:pointer">' +
+      '<td data-label="Request ID" class="col-id" title="' + esc(rid) + '">' + esc(rid.slice(0, 16)) + '</td>' +
+      '<td data-label="Session" class="col-session">' + esc(r.chatId || '-') + '</td>' +
+      '<td data-label="Model" class="col-model">' + esc(r.model || '-') + '</td>' +
+      '<td data-label="Status" class="col-status"><span class="badge ' + esc(r.status || '') + '">' + esc(r.status || '-') + '</span></td>' +
+      '<td data-label="Tokens In" class="col-tin">' + fmtNum(r.tokensIn || 0) + '</td>' +
+      '<td data-label="Tokens Out" class="col-tout">' + fmtNum(r.tokensOut || 0) + '</td>' +
+      '<td data-label="Duration" class="col-dur">' + dur + '</td>' +
+      '<td data-label="Created" class="col-created" title="' + esc(r.createdAt || '') + '">' + fmtRelTime(r.createdAt) + '</td>' +
+      '</tr>';
+
+    if (isExpanded) {
+      if (!expandedDetail) {
+        html += '<tr class="detail-row"><td colspan="8"><div class="detail-loading"><span class="spinner"></span> Loading detail...</div></td></tr>';
+      } else {
+        html += renderDetailRow(expandedDetail, r);
+      }
+    }
+  }
+  // Save scroll positions and collapsed states before DOM replace
+  var savedScrolls = {};
+  var savedCollapsed = {};
+  var sectionBodies = tbody.querySelectorAll('.detail-section-body');
+  for (var si = 0; si < sectionBodies.length; si++) {
+    var sb = sectionBodies[si];
+    if (sb.id && sb.scrollTop > 0) savedScrolls[sb.id] = sb.scrollTop;
+  }
+  var sections = tbody.querySelectorAll('.detail-section');
+  for (var sci = 0; sci < sections.length; sci++) {
+    var sec = sections[sci];
+    if (sec.id && sec.classList.contains('collapsed')) savedCollapsed[sec.id] = true;
+  }
+
+  tbody.innerHTML = html;
+
+  // Restore collapsed states and scroll positions
+  for (var cid in savedCollapsed) {
+    var cel = document.getElementById(cid);
+    if (cel) cel.classList.add('collapsed');
+  }
+  for (var sid in savedScrolls) {
+    var sel = document.getElementById(sid);
+    if (sel) sel.scrollTop = savedScrolls[sid];
+  }
+}
+
+function renderDetailRow(d, r) {
+  var duration = '';
+  if (d.createdAt && d.completedAt) {
+    var ms = new Date(d.completedAt).getTime() - new Date(d.createdAt).getTime();
+    if (ms < 1000) duration = ms + 'ms';
+    else if (ms < 60000) duration = (ms / 1000).toFixed(1) + 's';
+    else duration = Math.floor(ms / 60000) + 'm ' + Math.floor((ms % 60000) / 1000) + 's';
+  }
+
+  var html = '<tr class="detail-row"><td colspan="8"><div class="detail-content">';
+  // In-flight 요청만 취소 버튼 노출 (click은 reqTbody delegate에서 처리)
+  if (d.status === 'pending' || d.status === 'streaming') {
+    html += '<div class="detail-actions">' +
+      '<button class="btn-danger btn-cancel-req" data-cancel-rid="' + esc(d.requestId) + '">✕ 요청 취소</button>' +
+      '</div>';
+  }
+  html += detailField('Request ID', d.requestId);
+  html += detailField('Session', d.chatId || '-');
+  html += detailField('Status', d.status || '-');
+  html += detailField('Method', d.method || 'POST');
+  html += detailField('URL', d.url || '-');
+  html += detailField('Upstream Status', d.upstreamStatus != null ? d.upstreamStatus : '-');
+  html += detailField('Chunks Received', fmtNum(d.chunksReceived));
+  html += detailField('Full Text Length', fmtNum(d.fullTextLength));
+  html += detailField('Byte Size', fmtBytes(d.byteSizeKB));
+  html += detailField('Created', d.createdAt ? fmtTime(d.createdAt) + ' (' + fmtRelTime(d.createdAt) + ')' : '-');
+  if (d.completedAt) html += detailField('Completed', fmtTime(d.completedAt) + ' (' + fmtRelTime(d.completedAt) + ')');
+  if (duration) html += detailField('Duration', duration);
+  if (d.cost) {
+    html += detailField('Model', d.cost.model || '-');
+    html += detailField('Provider', d.cost.provider || '-');
+    html += detailField('Tokens In', fmtNum(d.cost.tokensIn));
+    html += detailField('Tokens Out', fmtNum(d.cost.tokensOut));
+    html += detailField('Cost', fmtCost(d.cost.estimatedCost));
+    html += detailField('Usage Source', d.cost.usageFromApi ? 'API' : 'estimated');
+    if (d.cost.pricingTier) {
+      html += detailField('Pricing Tier', d.cost.pricingTier === 'high' ? 'high (>threshold)' : 'standard');
+    }
+  } else {
+    if (r && r.model) html += detailField('Model', r.model);
+    if (r && r.provider) html += detailField('Provider', r.provider);
+  }
+  if (d.error) html += detailField('Error', d.error);
+  if (d.errorBody) html += detailSection('Error Body', d.errorBody, 'errBody-' + d.requestId);
+
+  // Request Headers
+  if (d.requestHeaders && Object.keys(d.requestHeaders).length > 0) {
+    var sanitized = Object.assign({}, d.requestHeaders);
+    // Mask sensitive headers
+    for (var hk in sanitized) {
+      var lk = hk.toLowerCase();
+      if (lk === 'authorization' || lk === 'x-api-key' || lk === 'api-key') {
+        var v = sanitized[hk];
+        sanitized[hk] = v.length > 12 ? v.slice(0, 8) + '...' + v.slice(-4) : '***';
+      }
+    }
+    html += detailSection('Request Headers', JSON.stringify(sanitized, null, 2), 'reqH-' + d.requestId);
+  }
+
+  // Upstream Response Headers
+  if (d.upstreamHeaders && Object.keys(d.upstreamHeaders).length > 0) {
+    html += detailSection('Response Headers', JSON.stringify(d.upstreamHeaders, null, 2), 'resH-' + d.requestId);
+  }
+
+  // Request Body
+  if (d.requestBody) {
+    var bodyDisplay = d.requestBody;
+    try { bodyDisplay = JSON.stringify(JSON.parse(d.requestBody), null, 2); } catch {}
+    html += detailSection('Request Body', bodyDisplay, 'reqB-' + d.requestId);
+  }
+
+  // Response Body
+  if (d.responseBody) {
+    var resDisplay = d.responseBody;
+    try { resDisplay = JSON.stringify(JSON.parse(d.responseBody), null, 2); } catch {}
+    html += detailSection('Response Body', resDisplay, 'resB-' + d.requestId);
+  }
+
+  html += '</div></td></tr>';
+  return html;
+}
+
+function detailField(key, val) {
+  return '<div class="detail-field"><span class="detail-key">' + esc(key) + '</span><span class="detail-val">' + esc(String(val)) + '</span></div>';
+}
+
+function detailSection(title, content, id) {
+  return '<div class="detail-section" id="sec-' + esc(id) + '">' +
+    '<div class="detail-section-header" onclick="toggleSection(\'' + esc(id) + '\')">' +
+      '<span class="detail-section-title">' + esc(title) + ' (' + fmtNum(content.length) + ' chars)</span>' +
+      '<span class="detail-section-actions">' +
+        '<button class="btn-copy-sm" onclick="event.stopPropagation();copyContent(\'' + esc(id) + '\')">Copy</button>' +
+        '<span class="detail-section-toggle">&#x25BC;</span>' +
+      '</span>' +
+    '</div>' +
+    '<div class="detail-section-body" id="body-' + esc(id) + '">' + esc(content) + '</div>' +
+  '</div>';
+}
+
+function toggleSection(id) {
+  var el = document.getElementById('sec-' + id);
+  if (el) el.classList.toggle('collapsed');
+}
+
+function copyContent(id) {
+  var el = document.getElementById('body-' + id);
+  if (!el) return;
+  navigator.clipboard.writeText(el.textContent).then(function () {
+    showToast('Copied to clipboard');
+  }).catch(function () {
+    showToast('Copy failed', 'error');
+  });
+}
+
+// Request row click → toggle expand and fetch detail
+document.getElementById('reqTbody').addEventListener('click', function (e) {
+  // Cancel 버튼 우선 처리 (행 토글 이벤트 차단)
+  var cancelBtn = e.target.closest('.btn-cancel-req');
+  if (cancelBtn) {
+    e.stopPropagation();
+    var rid = cancelBtn.getAttribute('data-cancel-rid');
+    if (rid) promptCancelRequest(rid);
+    return;
+  }
+  // Don't toggle when clicking copy button or section header
+  if (e.target.closest('.btn-copy-sm') || e.target.closest('.detail-section-header')) return;
+  var row = e.target.closest('.req-row');
+  if (!row) return;
+  var rid = row.getAttribute('data-rid');
+  if (expandedReqId === rid) {
+    expandedReqId = null;
+    expandedDetail = null;
+    renderRequests();
+  } else {
+    expandedReqId = rid;
+    expandedDetail = null;
+    renderRequests(); // show loading
+    fetchDetail(rid);
+  }
+});
+
+async function fetchDetail(rid) {
+  try {
+    var data = await api('/detail/' + rid);
+    if (expandedReqId === rid) {
+      expandedDetail = data;
+      renderRequests();
+    }
+  } catch (e) {
+    if (expandedReqId === rid) {
+      expandedDetail = { requestId: rid, error: 'Failed to load detail: ' + e.message };
+      renderRequests();
+    }
+  }
+}
+
+// ===== Render: Costs =====
+function renderCosts() {
+  var cost = healthData ? (healthData.cost || {}) : {};
+  document.getElementById('costStats').innerHTML =
+    statCard('Total Cost', fmtCost(cost.totalCost), 'c-orange') +
+    statCard('Total Tokens In', fmtNum(cost.totalTokensIn), '') +
+    statCard('Total Tokens Out', fmtNum(cost.totalTokensOut), '') +
+    statCard('Avg Cost / Request', cost.requestCount ? fmtCost(cost.totalCost / cost.requestCount) : '-', '');
+
+  var tbody = document.getElementById('costTbody');
+  if (costsData.length === 0) {
+    tbody.innerHTML = '<tr><td class="td-empty" colspan="7">No cost data</td></tr>';
+    return;
+  }
+
+  // Newest first
+  var sorted = costsData.slice().reverse();
+  tbody.innerHTML = sorted.map(function (c) {
+    return '<tr>' +
+      '<td data-label="Request ID" class="col-id" title="' + esc(c.requestId || '') + '">' + esc((c.requestId || '').slice(0, 16)) + '</td>' +
+      '<td data-label="Model" class="col-model">' + esc(c.model || '-') + '</td>' +
+      '<td data-label="Provider" class="col-provider">' + esc(c.provider || '-') + '</td>' +
+      '<td data-label="Tokens In" class="col-tin">' + fmtNum(c.tokensIn) + '</td>' +
+      '<td data-label="Tokens Out" class="col-tout">' + fmtNum(c.tokensOut) + '</td>' +
+      '<td data-label="Cost" class="col-cost">' + fmtCost(c.estimatedCost) + '</td>' +
+      '<td data-label="Source" class="col-source">' + (c.usageFromApi ? '<span class="c-green">API</span>' : '<span style="color:var(--fg-muted)">est.</span>') + '</td>' +
+      '</tr>';
+  }).join('');
+}
+
+// ===== Render: History =====
+function fmtDuration(ms) {
+  if (ms == null) return '-';
+  if (ms < 1000) return ms + 'ms';
+  if (ms < 60000) return (ms / 1000).toFixed(1) + 's';
+  return Math.floor(ms / 60000) + 'm ' + Math.floor((ms % 60000) / 1000) + 's';
+}
+
+function fmtTokens(tokIn, tokOut) {
+  function compact(n) {
+    if (n == null || n === 0) return '0';
+    if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+    if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+    return String(n);
+  }
+  return compact(tokIn) + ' / ' + compact(tokOut);
+}
+
+function renderHistory() {
+  // Stats
+  document.getElementById('historyStats').innerHTML =
+    statCard('Logged', fmtNum(historyTotal), 'c-accent', 'Max: ' + historyMax) +
+    statCard('Persisted', 'data/request-log.json', '', 'Survives restart');
+
+  var filtered = histFilter
+    ? historyData.filter(function (e) { return e.status === histFilter; })
+    : historyData.slice();
+
+  var tbody = document.getElementById('histTbody');
+  if (filtered.length === 0) {
+    tbody.innerHTML = '<tr><td class="td-empty" colspan="8">No history entries' +
+      (histFilter ? ' with status "' + esc(histFilter) + '"' : '') + '</td></tr>';
+    return;
+  }
+
+  var html = '';
+  for (var i = 0; i < filtered.length; i++) {
+    var e = filtered[i];
+    var rid = e.requestId || '';
+    var isExpanded = expandedHistId === rid;
+
+    html += '<tr class="hist-row" data-hrid="' + esc(rid) + '" style="cursor:pointer">' +
+      '<td data-label="Request ID" class="col-id" title="' + esc(rid) + '">' + esc(rid.slice(0, 16)) + '</td>' +
+      '<td data-label="Session" class="col-session">' + esc(e.chatId || '-') + '</td>' +
+      '<td data-label="Model" class="col-model">' + esc(e.model || '-') + '</td>' +
+      '<td data-label="Status" class="col-status"><span class="badge ' + esc(e.status || '') + '">' + esc(e.status || '-') + '</span></td>' +
+      '<td data-label="Tokens" class="col-tokens">' + fmtTokens(e.tokensIn, e.tokensOut) + '</td>' +
+      '<td data-label="Cost" class="col-cost">' + fmtCost(e.estimatedCost) + '</td>' +
+      '<td data-label="Duration" class="col-dur">' + fmtDuration(e.duration) + '</td>' +
+      '<td data-label="Created" class="col-created" title="' + esc(e.createdAt || '') + '">' + fmtRelTime(e.createdAt) + '</td>' +
+      '</tr>';
+
+    if (isExpanded) {
+      html += renderHistoryDetail(e);
+    }
+  }
+  tbody.innerHTML = html;
+}
+
+function renderHistoryDetail(e) {
+  var html = '<tr class="detail-row"><td colspan="8"><div class="detail-content">';
+  html += detailField('Request ID', e.requestId);
+  html += detailField('Session', e.chatId || '-');
+  html += detailField('Status', e.status || '-');
+  html += detailField('Method', e.method || 'POST');
+  html += detailField('URL', e.url || '-');
+  html += detailField('Upstream Status', e.upstreamStatus != null ? e.upstreamStatus : '-');
+  html += detailField('Chunks Received', fmtNum(e.chunksReceived));
+  html += detailField('Full Text Length', fmtNum(e.fullTextLength));
+  html += detailField('Byte Size', fmtBytes(e.byteSizeKB));
+  html += detailField('Created', e.createdAt ? fmtTime(e.createdAt) + ' (' + fmtRelTime(e.createdAt) + ')' : '-');
+  if (e.completedAt) html += detailField('Completed', fmtTime(e.completedAt) + ' (' + fmtRelTime(e.completedAt) + ')');
+  html += detailField('Duration', fmtDuration(e.duration));
+  html += detailField('Model', e.model || '-');
+  html += detailField('Provider', e.provider || '-');
+  html += detailField('Tokens In', fmtNum(e.tokensIn));
+  html += detailField('Tokens Out', fmtNum(e.tokensOut));
+  html += detailField('Cost', fmtCost(e.estimatedCost));
+  html += detailField('Usage Source', e.usageFromApi ? 'API' : 'estimated');
+  if (e.pricingTier) {
+    html += detailField('Pricing Tier', e.pricingTier === 'high' ? 'high (>threshold)' : 'standard');
+  }
+  if (e.error) html += detailField('Error', e.error);
+  if (e.errorBody) html += detailSection('Error Body', e.errorBody, 'histErr-' + e.requestId);
+
+  // Request Headers
+  if (e.requestHeaders && Object.keys(e.requestHeaders).length > 0) {
+    html += detailSection('Request Headers', JSON.stringify(e.requestHeaders, null, 2), 'histReqH-' + e.requestId);
+  }
+
+  // Response Headers
+  if (e.upstreamHeaders && Object.keys(e.upstreamHeaders).length > 0) {
+    html += detailSection('Response Headers', JSON.stringify(e.upstreamHeaders, null, 2), 'histResH-' + e.requestId);
+  }
+
+  // Request Body
+  if (e.requestBody) {
+    var bodyDisplay = e.requestBody;
+    try { bodyDisplay = JSON.stringify(JSON.parse(e.requestBody), null, 2); } catch {}
+    html += detailSection('Request Body', bodyDisplay, 'histReqB-' + e.requestId);
+  }
+
+  // Response Body
+  if (e.responseBody) {
+    var resDisplay = e.responseBody;
+    try { resDisplay = JSON.stringify(JSON.parse(e.responseBody), null, 2); } catch {}
+    html += detailSection('Response Body', resDisplay, 'histResB-' + e.requestId);
+  }
+
+  html += '</div></td></tr>';
+  return html;
+}
+
+// History row click → toggle expand
+document.getElementById('histTbody').addEventListener('click', function (e) {
+  if (e.target.closest('.btn-copy-sm') || e.target.closest('.detail-section-header')) return;
+  var row = e.target.closest('.hist-row');
+  if (!row) return;
+  var rid = row.getAttribute('data-hrid');
+  expandedHistId = expandedHistId === rid ? null : rid;
+  renderHistory();
+});
+
+// ===== Render: Logs =====
+function renderLogs() {
+  var container = document.getElementById('logContainer');
+  var search = (document.getElementById('logSearch').value || '').toLowerCase();
+
+  var filtered = logsData;
+  if (search) {
+    filtered = filtered.filter(function (e) {
+      return (e.msg && e.msg.toLowerCase().indexOf(search) >= 0) ||
+             (e.data && JSON.stringify(e.data).toLowerCase().indexOf(search) >= 0);
+    });
+  }
+
+  if (filtered.length === 0) {
+    container.innerHTML = '<div class="log-empty">No logs' + (search ? ' matching "' + esc(search) + '"' : '') + '</div>';
+    return;
+  }
+
+  // Newest first
+  var sorted = filtered.slice().reverse();
+  container.innerHTML = sorted.map(function (e) {
+    var dataStr = e.data ? JSON.stringify(e.data) : '';
+    return '<div class="log-entry">' +
+      '<span class="log-ts">' + fmtTimeShort(e.ts) + '</span>' +
+      '<span class="log-lvl ' + esc(e.level || '') + '">' + esc((e.level || '').toUpperCase()) + '</span>' +
+      '<span class="log-msg">' + esc(e.msg || '') + '</span>' +
+      (dataStr ? '<span class="log-data">' + esc(dataStr) + '</span>' : '') +
+      '</div>';
+  }).join('');
+}
+
+// ===== Render: Config =====
+function renderConfig() {
+  if (!configData) return;
+  var container = document.getElementById('configContainer');
+
+  var rows = Object.entries(configData).map(function (entry) {
+    var k = entry[0], v = entry[1];
+    var valHtml;
+    if (v === null || v === undefined) {
+      valHtml = '<span class="null">null</span>';
+    } else if (typeof v === 'object') {
+      valHtml = esc(JSON.stringify(v, null, 2));
+    } else if (typeof v === 'boolean') {
+      valHtml = '<span class="' + (v ? 'bool-true' : 'bool-false') + '">' + v + '</span>';
+    } else {
+      valHtml = esc(String(v));
+    }
+    return '<div class="config-row">' +
+      '<div class="config-key">' + esc(k) + '</div>' +
+      '<div class="config-val">' + valHtml + '</div>' +
+      '</div>';
+  }).join('');
+
+  container.innerHTML = '<div class="config-list">' + rows + '</div>';
+}
+
+// ===== Data Fetching =====
+async function fetchHealth() {
+  try {
+    healthData = await api('/health');
+    renderOverview();
+  } catch (e) {
+    var chip = document.getElementById('statusChip');
+    var label = document.getElementById('statusLabel');
+    chip.className = 'status-chip error';
+    label.textContent = 'disconnected';
+    showToast('Connection failed: ' + e.message, 'error');
+  }
+}
+
+async function fetchRequests() {
+  try {
+    var data = await api('/requests');
+    requestsData = data.requests || [];
+    renderRequests();
+  } catch (e) { /* silent */ }
+}
+
+async function fetchCosts() {
+  try {
+    var data = await api('/metrics/cost/all');
+    costsData = data.costs || [];
+    renderCosts();
+  } catch (e) { /* silent */ }
+}
+
+async function fetchHistory() {
+  try {
+    var data = await api('/requests/history?limit=100');
+    historyData = data.entries || [];
+    historyTotal = data.total || 0;
+    historyMax = data.maxEntries || 100;
+    renderHistory();
+  } catch (e) { /* silent */ }
+}
+
+async function fetchLogs() {
+  try {
+    var limit = document.getElementById('logLimit').value || 200;
+    var path = '/logs?limit=' + limit;
+    if (logLevelFilter) path += '&level=' + logLevelFilter;
+    var data = await api(path);
+    logsData = data.logs || [];
+    renderLogs();
+  } catch (e) {
+    document.getElementById('logContainer').innerHTML =
+      '<div class="log-empty" style="color:var(--red)">Failed to fetch logs: ' + esc(e.message) + '</div>';
+  }
+}
+
+async function fetchConfig() {
+  try {
+    configData = await api('/config');
+    renderConfig();
+  } catch (e) {
+    document.getElementById('configContainer').innerHTML =
+      '<div class="log-empty" style="color:var(--red)">Failed to fetch config: ' + esc(e.message) + '</div>';
+  }
+}
+
+async function refreshAll() {
+  if (isRefreshing) return;
+  isRefreshing = true;
+  var btn = document.getElementById('refreshBtn');
+  btn.style.animation = 'spin 0.6s linear infinite';
+
+  await Promise.all([fetchHealth(), fetchRequests(), fetchCosts(), fetchHistory()]);
+
+  var activeTab = document.querySelector('.tab-btn.active');
+  if (activeTab) {
+    var tab = activeTab.dataset.tab;
+    if (tab === 'logs') fetchLogs();
+    if (tab === 'config') fetchConfig();
+  }
+
+  btn.style.animation = '';
+  isRefreshing = false;
+}
+
+// ===== SSE Live Events =====
+var evtSource = null;
+
+function connectSSE() {
+  if (evtSource) { evtSource.close(); evtSource = null; }
+  var label = document.getElementById('sseStatus');
+
+  evtSource = new EventSource(PROXY_BASE + '/admin/events');
+
+  evtSource.onopen = function () {
+    label.textContent = '\u26A1 live';
+    label.style.color = 'var(--green)';
+    var chip = document.getElementById('statusChip');
+    var sl = document.getElementById('statusLabel');
+    chip.className = 'status-chip ok';
+    sl.textContent = 'connected';
+  };
+
+  evtSource.onmessage = function (e) {
+    try {
+      var ev = JSON.parse(e.data);
+      // Visual blink on update (color varies by event type)
+      document.body.className = document.body.className.replace(/\bsse-blink\S*/g, '').trim();
+      void document.body.offsetWidth; // force reflow to restart animation
+      document.body.classList.add('sse-blink', 'sse-blink-' + (ev.type || 'created'));
+      // Always refresh overview + active tab
+      fetchHealth();
+      var tab = document.querySelector('.tab-btn.active')?.dataset?.tab;
+      if (tab === 'requests') fetchRequests();
+      if (tab === 'costs') fetchCosts();
+      if (tab === 'history' && (ev.type === 'completed' || ev.type === 'failed' || ev.type === 'cancelled')) {
+        fetchHistory();
+      }
+    } catch (err) { /* ignore parse errors from keepalive */ }
+  };
+
+  evtSource.onerror = function () {
+    label.textContent = '\u26A1 reconnecting...';
+    label.style.color = 'var(--badge-failed)';
+    var chip = document.getElementById('statusChip');
+    var sl = document.getElementById('statusLabel');
+    chip.className = 'status-chip error';
+    sl.textContent = 'reconnecting';
+    // EventSource auto-reconnects; no manual retry needed
+  };
+}
+
+// ===== Init =====
+(async function () {
+  await refreshAll();
+  connectSSE();
+})();
+</script>
+</body>
+</html>
