@@ -2,7 +2,7 @@ FROM node:24-slim AS base
 WORKDIR /app
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
-RUN corepack enable && corepack install --global pnpm@latest
+RUN corepack enable && corepack install --global pnpm@10
 
 # ── Clone upstream and apply patches ──
 FROM base AS source
