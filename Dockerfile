@@ -26,6 +26,18 @@ RUN if [ "$APPLY_LLM_PROXY_PATCH" = "true" ]; then \
       echo "[SKIP] llm-proxy patch not applied (retired 2026-08-22)"; \
     fi
 
+# HypaMemory 벡터 캐시 조회 병렬화 (성능 수정, 런타임 구성요소 없음).
+# 원본은 청크마다 HTTP 1건씩 순차 조회 → 긴 대화에서 수백~수천 왕복이 되고
+# 응답 수신 후 메시지가 채팅에 붙기까지 원격 환경에서 수십초~수분 걸린다.
+# 근거·실측: docs/2026-08-24-hypa-vector-parallel.md
+ARG APPLY_HYPA_PARALLEL_PATCH=true
+COPY patches/hypa-parallel.cjs apply-hypa-parallel.cjs
+RUN if [ "$APPLY_HYPA_PARALLEL_PATCH" = "true" ]; then \
+      node apply-hypa-parallel.cjs; \
+    else \
+      echo "[SKIP] hypa parallel patch not applied"; \
+    fi
+
 # ── Production dependencies ──
 FROM base AS deps
 COPY --from=source /app/package.json /app/pnpm-lock.yaml ./
