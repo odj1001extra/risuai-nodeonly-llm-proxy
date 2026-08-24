@@ -1,63 +1,84 @@
 {
-    "name": "PC2 Risuai",
-    "icons": [
-        {
-            "src": "logo_512.png",
-            "type": "image/png",
-            "sizes": "512x512"
-        },
-        {
-            "src": "logo_192.png",
-            "type": "image/png",
-            "sizes": "192x192"
-        },
-        {
-            "src": "logo_16.png",
-            "type": "image/png",
-            "sizes": "16x16"
-        },
-        {
-            "src": "logo_32.png",
-            "type": "image/png",
-            "sizes": "32x32"
-        },
-        {
-            "src": "logo_256.png",
-            "type": "image/png",
-            "sizes": "256x256"
-        }
-    ],
-    "start_url": "/",
-    "display": "standalone",
-    "theme_color": "#4682B4",
-    "share_target": {
-        "action": "/receive-files/",
-        "method": "POST",
-        "enctype": "multipart/form-data",
-        "params": {
-            "files": [
-                {
-                    "name": "character",
-                    "accept": [".charx"]
-                },
-                {
-                    "name": "preset",
-                    "accept": [".risup"]
-                },
-                {
-                    "name": "module",
-                    "accept": [".risum"]
-                }
-            ]
-        }
+  "id": "/",
+  "name": "PC2 Risuai",
+  "short_name": "PC2 Risu",
+  "description": "An AI frontend for both light and core users.",
+  "lang": "en",
+  "dir": "ltr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#282a36",
+  "theme_color": "#4682B4",
+  "icons": [
+    {
+      "src": "/logo_192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
     },
-    "file_handlers": [
+    {
+      "src": "/logo_256.png",
+      "sizes": "256x256",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo_512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo_maskable_192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/logo_maskable_512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "share_target": {
+    "action": "/receive-files/",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "files": [
         {
-            "action": "/",
-            "accept": {
-                "application/octet-stream": [".charx", ".risup", ".risum"]
-            }
+          "name": "character",
+          "accept": [
+            ".charx"
+          ]
+        },
+        {
+          "name": "preset",
+          "accept": [
+            ".risup"
+          ]
+        },
+        {
+          "name": "module",
+          "accept": [
+            ".risum"
+          ]
         }
-    ]
-
+      ]
+    }
+  },
+  "file_handlers": [
+    {
+      "action": "/",
+      "accept": {
+        "application/octet-stream": [
+          ".charx",
+          ".risup",
+          ".risum"
+        ]
+      }
+    }
+  ]
 }

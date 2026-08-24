@@ -11,6 +11,15 @@ services:
     volumes:
       - risuai-save:/app/save
       - ./custom-manifest/manifest.json:/app/dist/manifest.json:ro
+      # 아이콘은 6002(pocketRisu 순정 인스턴스)와 홈 화면/탭에서 구분되도록 초록 색조본으로 교체.
+      # 생성: pocketRisu/web/gen_tinted.py
+      - ./custom-manifest/icons/logo_16.png:/app/dist/logo_16.png:ro
+      - ./custom-manifest/icons/logo_32.png:/app/dist/logo_32.png:ro
+      - ./custom-manifest/icons/logo_192.png:/app/dist/logo_192.png:ro
+      - ./custom-manifest/icons/logo_256.png:/app/dist/logo_256.png:ro
+      - ./custom-manifest/icons/logo_512.png:/app/dist/logo_512.png:ro
+      - ./custom-manifest/icons/logo_maskable_192.png:/app/dist/logo_maskable_192.png:ro
+      - ./custom-manifest/icons/logo_maskable_512.png:/app/dist/logo_maskable_512.png:ro
     # depends_on:
     #   - llm-proxy
 
