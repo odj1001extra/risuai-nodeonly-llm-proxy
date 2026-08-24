@@ -142,10 +142,19 @@ export function pushChunk(requestId, chunkText) {
   }
 }
 
+const TERMINAL_STATUSES = ['completed', 'failed', 'cancelled'];
+
 /** Mark buffer as completed and schedule cleanup */
 export function completeBuffer(requestId) {
   const buf = buffers.get(requestId);
   if (!buf) return;
+  // A cancelled/already-terminal buffer must not be resurrected: relay.js's
+  // upstream read can still be in flight when cancelBuffer() fires (see the
+  // h2fetch abort fix), and finishes afterward regardless. Without this guard
+  // that late finish would flip status back to 'completed' and double-log the
+  // request even though cancelBuffer() already cleared subscribers and told
+  // the client it was cancelled — nothing is listening for this anymore.
+  if (TERMINAL_STATUSES.includes(buf.status)) return;
   buf.status = 'completed';
   buf.completedAt = new Date();
   buf.expiresAt = Date.now() + BUFFER_TTL_MS;
@@ -168,6 +177,7 @@ export function completeBuffer(requestId) {
 export function failBuffer(requestId, error, errorBody) {
   const buf = buffers.get(requestId);
   if (!buf) return;
+  if (TERMINAL_STATUSES.includes(buf.status)) return;
   buf.status = 'failed';
   buf.error = typeof error === 'string' ? error : (error?.message ?? String(error));
   buf.errorBody = typeof errorBody === 'string' ? errorBody : undefined;

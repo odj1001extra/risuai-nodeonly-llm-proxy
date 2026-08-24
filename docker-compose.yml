@@ -11,12 +11,23 @@ services:
     volumes:
       - risuai-save:/app/save
       - ./custom-manifest/manifest.json:/app/dist/manifest.json:ro
-    depends_on:
-      - llm-proxy
+    # depends_on:
+    #   - llm-proxy
 
-  llm-proxy:
-    build: ./llm-proxy
-    restart: always
+# ─────────────────────────────────────────────────────────────────────────────
+# llm-proxy 사이드카 — 2026-08-22 은퇴 (주석 처리, 소스는 llm-proxy/ 에 보존)
+#
+# upstream v1.9.0+ 의 서버사이드 job(/api/model-jobs)이 같은 역할을 하고, 그쪽은
+# 서버가 응답을 소유해 재접속으로 복구된다. 우리 경로는 브라우저가 소유해서
+# SSE 재연결 10회가 소진되면 응답이 그대로 버려졌다 (실제 유실 원인).
+# 배경·근거·롤백 절차: docs/2026-08-22-llm-proxy-retirement.md
+#
+# 되살리려면 아래 블록과 위 depends_on 주석을 풀고, Dockerfile 을
+# --build-arg APPLY_LLM_PROXY_PATCH=true 로 빌드할 것.
+# ─────────────────────────────────────────────────────────────────────────────
+#  llm-proxy:
+#    build: ./llm-proxy
+#    restart: always
 
 volumes:
   risuai-save:

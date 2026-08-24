@@ -77,16 +77,34 @@ function h2fetch(url, { method = 'GET', headers = {}, body, signal } = {}) {
     }
 
     const req = session.request(reqHeaders);
-    let settled = false;
+    let settled = false;   // guards the fetch PROMISE — only relevant pre-response
+    let bodyDone = false;  // guards the abort listener's lifetime — cleared once the body finishes
 
-    // Abort signal
+    // Abort must stay effective for the whole request, not just until upstream
+    // headers arrive. Providers (e.g. OpenRouter) can send headers within a
+    // second while the BODY keeps streaming for 60-150s+ afterward (padding
+    // while the completion is still generating) — if the abort listener were
+    // torn down at 'response' time, a cancel during that body-read window
+    // would silently do nothing: the upstream read runs to completion anyway,
+    // and by the time it finishes cancelBuffer() has already told the client
+    // "cancelled" and cleared its subscribers, so the finished content is
+    // orphaned (this was the actual bug: relay:complete logged well after
+    // store:cancelled, with real bytes nobody ever received).
     const onAbort = () => {
-      if (settled) return;
-      settled = true;
       req.close(http2.constants.NGHTTP2_CANCEL);
-      reject(new DOMException('The operation was aborted', 'AbortError'));
+      if (!settled) {
+        settled = true;
+        reject(new DOMException('The operation was aborted', 'AbortError'));
+      }
+      // If headers already arrived, req.close() above ends the h2 stream,
+      // which fires req.on('error')/('end') below — that's what actually
+      // stops the in-flight body read instead of letting it run to waste.
     };
-    if (signal) signal.addEventListener('abort', onAbort, { once: true });
+    if (signal) signal.addEventListener('abort', onAbort);
+
+    function detachAbort() {
+      if (signal) signal.removeEventListener('abort', onAbort);
+    }
 
     // Send body
     if (body) req.write(body);
@@ -95,7 +113,8 @@ function h2fetch(url, { method = 'GET', headers = {}, body, signal } = {}) {
     req.on('response', (resHeaders) => {
       if (settled) return;
       settled = true;
-      if (signal) signal.removeEventListener('abort', onAbort);
+      // NOTE: abort listener stays attached — detached only once the body
+      // read actually finishes (end/error below), not here.
 
       const status = resHeaders[':status'];
 
@@ -111,12 +130,21 @@ function h2fetch(url, { method = 'GET', headers = {}, body, signal } = {}) {
       const readable = new ReadableStream({
         start(controller) {
           req.on('data', (chunk) => controller.enqueue(new Uint8Array(chunk)));
-          req.on('end', () => controller.close());
+          req.on('end', () => {
+            if (bodyDone) return;
+            bodyDone = true;
+            detachAbort();
+            controller.close();
+          });
           req.on('error', (err) => {
+            if (bodyDone) return;
+            bodyDone = true;
+            detachAbort();
             try { controller.error(err); } catch { /* already closed */ }
           });
         },
         cancel() {
+          detachAbort();
           req.close(http2.constants.NGHTTP2_CANCEL);
         },
       });
@@ -127,7 +155,7 @@ function h2fetch(url, { method = 'GET', headers = {}, body, signal } = {}) {
     req.on('error', (err) => {
       if (settled) return;
       settled = true;
-      if (signal) signal.removeEventListener('abort', onAbort);
+      detachAbort();
       reject(err);
     });
   });
@@ -216,6 +244,18 @@ export async function startRelay(requestId) {
         await consumeStream(requestId, response, combinedSignal, costTracker);
       } else {
         const text = await readResponseWithLimit(response, MAX_RESPONSE_BYTES);
+        // A cancel that lands after headers but mid-body can, depending on how
+        // the h2 stream unwinds, surface as a clean read end rather than an
+        // error (see h2fetch's onAbort) — readResponseWithLimit then returns
+        // normally with a partial/short body instead of throwing. Check the
+        // signal explicitly so this doesn't get misreported as a real
+        // completion; completeBuffer()/pushChunk() would also just no-op
+        // against an already-cancelled buffer, but the log line matters for
+        // anyone debugging via `docker compose logs`.
+        if (buf.abortController.signal.aborted) {
+          log.info('relay:cancelled', { requestId });
+          return;
+        }
         costTracker.processChunk(text);
         pushChunk(requestId, text);
         // Finalize cost BEFORE completeBuffer so addLogEntry sees finalized tokensIn/tokensOut
@@ -227,11 +267,16 @@ export async function startRelay(requestId) {
       return; // success — no retry needed
 
     } catch (err) {
+      // Checked first and unconditionally: a cancel that lands AFTER upstream
+      // headers arrived closes the h2 stream via NGHTTP2_CANCEL, which surfaces
+      // as a plain stream-close Error (not a DOMException named 'AbortError') —
+      // relying on err.name here would misfile a real user cancel as a fetch
+      // error and retry/failBuffer it instead of just stopping quietly.
+      if (buf.abortController.signal.aborted) {
+        log.info('relay:cancelled', { requestId });
+        return; // user-initiated cancel
+      }
       if (err.name === 'AbortError') {
-        if (buf.abortController.signal.aborted) {
-          log.info('relay:cancelled', { requestId });
-          return; // user-initiated cancel
-        }
         // timeout
         lastError = 'Request timed out';
         if (attempt < MAX_RETRIES) continue;
