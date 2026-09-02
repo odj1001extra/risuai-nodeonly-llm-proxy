@@ -31,23 +31,31 @@ safe zone 에 넣고 배경 그라디언트를 바깥까지 연장한 버전이�
 
 ## HTTPS / 접속 주소
 안드로이드 Chrome 은 secure context 에서만 앱 설치를 허용한다. 이 인스턴스는
-Windows 호스트의 Tailscale 로 노출돼 있다 (Windows 56001 → WSL 6001 포워딩 경유):
+Windows 호스트의 Tailscale 로 노출돼 있다 (Windows 56001 → WSL 6001 포워딩 경유).
 
-    https://okarin-pc-2023.tail2f4a72.ts.net:56001/     # 6001, 이 스택
-    https://okarin-pc-2023.tail2f4a72.ts.net:56002/     # 6002, pocketRisu
+| | PWA 설치 주소 | 루트 |
+|---|---|---|
+| 6001, 이 스택 | `https://okarin-pc-2023.tail2f4a72.ts.net:56001/poketrisu1/` | `:56001/` |
+| 6002, pocketRisu | `https://okarin-pc-2023.tail2f4a72.ts.net:56002/poketrisu2/` | `:56002/` |
 
-## ⚠️ 제약 — 안드로이드에서는 둘 중 하나만 설치된다
+## 왜 경로(`/poketrisu1/`)로 설치하는가
 
-포트가 다르면 웹 표준상 origin 이 다르지만, **안드로이드 설치 레벨에서는 그게
-유지되지 않는다.** Chrome 이 PWA 설치 시 만드는 WebAPK 의 intent filter 는
+포트만 다르면 안드로이드가 두 앱을 구분하지 못한다. Chrome 이 PWA 설치 시 만드는
+WebAPK 의 intent filter 가 scheme/host/pathPrefix 뿐이고 **포트가 없기** 때문이다.
+하나를 설치한 뒤 나머지를 열면 설치 버튼 대신 "○○에서 열기" 가 뜬다 (실측 확인).
 
-    <data android:scheme="https" android:host="..." android:pathPrefix="/" />
+`pathPrefix` 는 filter 에 들어가므로 경로를 갈라 해결한다. 단 **형제 관계**여야 한다 —
+한쪽을 `/` 에 두면 그게 바깥 앱이 되어 다른 쪽까지 삼키므로, 6002 와 함께 옮겼다.
+manifest 의 `id`·`scope`·`start_url` 셋을 모두 그 경로로 맞춘다.
 
-이 셋뿐이고 **포트 속성이 없다**. 그래서 `:56001` 로 설치한 WebAPK 가 `:56002` 도
-자기 영역으로 잡는다. 하나를 설치한 뒤 나머지를 크롬으로 열면 설치 버튼 대신
-"○○에서 열기" 가 뜨는 게 이 증상이다 (실측 확인).
+경로는 tailscale serve 의 `--set-path` 가 접두어를 벗겨 백엔드 `/` 로 넘겨서 만든다.
+정적 파일이나 심볼릭 링크로는 안 되는데, 서버의 `app.get('/')` 핸들러가 index.html 에
+`__NODE__` 를 주입하고 `express.static` 경로로는 그게 빠지기 때문이다.
 
-여기서 만든 id·short_name·아이콘 구분은 브라우저 탭과 데스크톱 설치, 그리고
-실제로 설치된 쪽의 홈 화면 표시에는 유효하지만, 두 번째 앱이 설치되지 않는 문제
-자체는 해결하지 못한다. 풀려면 host 를 갈라야 한다 (tailscale 사이드카로 전용
-노드 이름 부여 등). 자세한 내용은 pocketRisu/web/README.md.
+설정 재현: `pocketRisu/web/setup-tailscale-serve.sh` (양쪽을 한 번에 잡는다)
+
+## 상태
+
+serve 매핑과 manifest 는 적용 완료. **안드로이드에서 두 앱이 실제로 따로 설치되는지는
+아직 실측 전이다** — 기존에 설치된 앱(scope `/`)을 먼저 지워야 새 경로들이 산다.
+자세한 배경은 pocketRisu/web/README.md.
