@@ -54,8 +54,10 @@ manifest 의 `id`·`scope`·`start_url` 셋을 모두 그 경로로 맞춘다.
 
 설정 재현: `pocketRisu/web/setup-tailscale-serve.ps1` (Windows PowerShell, 양쪽을 한 번에)
 
-## 상태
+## 상태 (2026-09-03 실측 완료)
 
-serve 매핑과 manifest 는 적용 완료. **안드로이드에서 두 앱이 실제로 따로 설치되는지는
-아직 실측 전이다** — 기존에 설치된 앱(scope `/`)을 먼저 지워야 새 경로들이 산다.
-자세한 배경은 pocketRisu/web/README.md.
+**안드로이드에서 두 앱이 각각 설치되는 것을 확인했다.** 한쪽을 설치한 상태에서 다른
+쪽 경로를 열면 "○○에서 열기" 가 아니라 "앱 설치" 가 뜬다.
+
+재부팅 후 serve 매핑이 살아남는지는 아직 미검증 — 자세한 내용과 되돌리기 절차는
+pocketRisu/web/README.md.
