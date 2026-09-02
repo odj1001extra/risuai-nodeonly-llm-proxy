@@ -52,7 +52,7 @@ manifest 의 `id`·`scope`·`start_url` 셋을 모두 그 경로로 맞춘다.
 정적 파일이나 심볼릭 링크로는 안 되는데, 서버의 `app.get('/')` 핸들러가 index.html 에
 `__NODE__` 를 주입하고 `express.static` 경로로는 그게 빠지기 때문이다.
 
-설정 재현: `pocketRisu/web/setup-tailscale-serve.sh` (양쪽을 한 번에 잡는다)
+설정 재현: `pocketRisu/web/setup-tailscale-serve.ps1` (Windows PowerShell, 양쪽을 한 번에)
 
 ## 상태
 
